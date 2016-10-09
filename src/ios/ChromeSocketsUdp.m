@@ -49,6 +49,7 @@ static NSString* stringFromData(NSData* data) {
 - (void)close:(CDVInvokedUrlCommand*)command;
 - (void)getInfo:(CDVInvokedUrlCommand*)command;
 - (void)getSockets:(CDVInvokedUrlCommand*)command;
+- (void)setBroadcast:(CDVInvokedUrlCommand*)command;
 - (void)joinGroup:(CDVInvokedUrlCommand*)command;
 - (void)leaveGroup:(CDVInvokedUrlCommand*)command;
 - (void)setMulticastTimeToLive:(CDVInvokedUrlCommand*)command;
@@ -164,7 +165,7 @@ static NSString* stringFromData(NSData* data) {
         if ([bufferSize integerValue] > UINT32_MAX) {
             [_socket setMaxReceiveIPv6BufferSize:UINT32_MAX];
         } else {
-            [_socket setMaxReceiveIPv6BufferSize:(int)[_bufferSize integerValue]];
+            [_socket setMaxReceiveIPv6BufferSize:[_bufferSize integerValue]];
         }
     }
 }
@@ -262,7 +263,7 @@ static NSString* stringFromData(NSData* data) {
 
     ChromeSocketsUdpSocket *socket = [[ChromeSocketsUdpSocket alloc] initWithId:_nextSocketId++ plugin:self properties:properties];
     _sockets[[NSNumber numberWithUnsignedInteger:socket->_socketId]] = socket;
-    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsInt:(int)socket->_socketId] callbackId:command.callbackId];
+    [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsInt:socket->_socketId] callbackId:command.callbackId];
 }
 
 - (void)update:(CDVInvokedUrlCommand*)command
@@ -343,7 +344,7 @@ static NSString* stringFromData(NSData* data) {
         VERBOSE_LOG(@"ACK %@.%@ Write: %d", socketId, command.callbackId, success);
 
         if (success) {
-            [commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsInt:(int)[data length]] callbackId:command.callbackId];
+            [commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsInt:[data length]] callbackId:command.callbackId];
         } else {
             [commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[self buildErrorInfoWithErrorCode:[error code] message:[error localizedDescription]]] callbackId:command.callbackId];
         }
@@ -405,6 +406,25 @@ static NSString* stringFromData(NSData* data) {
 
     [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:socketsInfo] callbackId:command.callbackId];
 }
+- (void)setBroadcast:(CDVInvokedUrlCommand *)command
+{
+    NSNumber* socketId = [command argumentAtIndex:0];
+    BOOL enabled = [[command argumentAtIndex:1] boolValue];
+    
+    ChromeSocketsUdpSocket* socket = _sockets[socketId];
+    
+    if (socket == nil) {
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[self buildErrorInfoWithErrorCode:ENOTSOCK message:@"Invalid Argument"]] callbackId:command.callbackId];
+        return;
+    }
+    
+    NSError* err;
+    if([socket->_socket enableBroadcast:(enabled) error:&err]){
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK] callbackId:command.callbackId];
+    }else{
+        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[self buildErrorInfoWithErrorCode:[err code] message:[err localizedDescription]]] callbackId:command.callbackId];
+    }
+}
 
 - (void)joinGroup:(CDVInvokedUrlCommand *)command
 {
@@ -427,6 +447,7 @@ static NSString* stringFromData(NSData* data) {
         [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsDictionary:[self buildErrorInfoWithErrorCode:[err code] message:[err localizedDescription]]] callbackId:command.callbackId];
     }
 }
+
 
 - (void)leaveGroup:(CDVInvokedUrlCommand *)command
 {
@@ -562,7 +583,7 @@ static NSString* stringFromData(NSData* data) {
 
     NSDictionary* info = @{
         @"socketId": [NSNumber numberWithUnsignedInteger:theSocketId],
-        @"resultCode": [NSNumber numberWithUnsignedInt:(int)[theError code]],
+        @"resultCode": [NSNumber numberWithUnsignedInt:[theError code]],
         @"message": [theError localizedDescription],
     };
 
